@@ -1,6 +1,6 @@
 import os
 import json
-import google.generativeai as genai
+from groq import Groq
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -8,12 +8,24 @@ load_dotenv()
 # Support both .env (local) and Streamlit Cloud secrets
 try:
     import streamlit as st
-    api_key = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY", "")
+    api_key = st.secrets.get("GROQ_API_KEY") or os.getenv("GROQ_API_KEY", "")
 except Exception:
-    api_key = os.getenv("GEMINI_API_KEY", "")
+    api_key = os.getenv("GROQ_API_KEY", "")
 
-genai.configure(api_key=api_key)
-model = genai.GenerativeModel("gemini-1.5-flash")
+client = Groq(api_key=api_key)
+
+# Best free Groq model for instruction-following tasks
+MODEL = "llama-3.3-70b-versatile"
+
+
+def _call_groq(prompt: str, max_tokens: int = 512) -> str:
+    response = client.chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=max_tokens,
+        temperature=0.3,
+    )
+    return response.choices[0].message.content.strip()
 
 
 def generate_segment_filters(natural_language: str) -> dict:
@@ -32,12 +44,15 @@ Return ONLY a valid JSON object with these possible keys:
 Example output:
 {{"min_spend": 5000, "min_orders": 3}}
 
-Return only the JSON, no explanation, no markdown.
+Return only the JSON object. No explanation. No markdown. No backticks.
 """
     try:
-        response = model.generate_content(prompt)
-        text = response.text.strip().strip("```json").strip("```").strip()
+        text = _call_groq(prompt, max_tokens=256)
+        # Strip any accidental markdown fences
+        text = text.strip().strip("```json").strip("```").strip()
         return json.loads(text)
+    except json.JSONDecodeError:
+        return {"error": "AI returned invalid JSON. Try rephrasing your description."}
     except Exception as e:
         return {"error": str(e)}
 
@@ -50,16 +65,15 @@ You are a marketing copywriter. Generate a {channel} marketing message based on 
 
 Requirements:
 - Channel: {channel}
-- Keep it concise and compelling
-- Use a friendly, professional tone
-- Include a clear call to action
+- Concise and compelling
+- Friendly, professional tone
+- Clear call to action
 - For WhatsApp/SMS: keep under 160 characters
 - For Email/RCS: can be longer
 
-Return only the message text, no explanation.
+Return only the message text. No explanation. No subject line label. No markdown.
 """
     try:
-        response = model.generate_content(prompt)
-        return response.text.strip()
+        return _call_groq(prompt, max_tokens=300)
     except Exception as e:
         return f"Error generating message: {str(e)}"

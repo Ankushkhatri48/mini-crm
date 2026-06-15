@@ -1,8 +1,9 @@
 import time
 import streamlit as st
 
-# Max AI calls per user per session window
-AI_CALL_LIMIT = 20
+# Groq free tier limit: 30 requests/minute, 14,400/day
+# Setting conservative app-level limit per user per hour
+AI_CALL_LIMIT = 30
 AI_WINDOW_SECONDS = 3600  # 1 hour
 
 
